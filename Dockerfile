@@ -9,4 +9,4 @@ COPY src ./src
 
 RUN mvn package -DskipTests
 
-CMD ["java","-jar","JavaPro-0.0.2-SNAPSHOT.jar","--spring-profiles.active=prod"]
+CMD ["java","-jar","./target/JavaPro-0.0.2-SNAPSHOT.jar","--spring-profiles.active=prod"]

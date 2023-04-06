@@ -8,5 +8,5 @@ COPY pom.xml .
 COPY src ./src
 
 RUN mvn package -DskipTests
-# 启动网关服务
-CMD["java","-jar","JavaPro-0.0.1-SNAPSHOT.jar","--spring-profiles.active=prod"]
+
+CMD ["java","-jar","JavaPro-0.0.2-SNAPSHOT.jar","--spring-profiles.active=prod"]

@@ -3,12 +3,10 @@ spring:
     name: JavaPro
   datasource:
     driver-class-name: com.mysql.jdbc.Driver
+    #服务器上面写localhost是无效的，因为springboot容器里面没有MySQL，MySQL在容器外面，固无法访问
     url: jdbc:mysql://120.25.122.29:3306/user_center?useUnicode=true&characterEncoding=utf8&useSSL=false
     username: root
     password: SBnightwatch777_
-#    url: jdbc:mysql://localhost:3306/jadw
-#    username: root
-#    password:
   session:
     timeout: 86400
 server:

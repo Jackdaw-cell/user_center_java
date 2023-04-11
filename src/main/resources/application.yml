@@ -3,7 +3,7 @@ spring:
     name: JavaPro
   datasource:
     driver-class-name: com.mysql.jdbc.Driver
-    url: jdbc:mysql://120.25.122.29:3306/user_center
+    url: jdbc:mysql://120.25.122.29:3306/user_center?useUnicode=true&characterEncoding=utf8&useSSL=false
     username: root
     password: SBnightwatch777_
 #    url: jdbc:mysql://localhost:3306/jadw

@@ -1,4 +1,4 @@
-package com.jackdaw.javapro.model.domain.request;
+package com.jackdaw.javapro.model.request;
 
 import lombok.Data;
 

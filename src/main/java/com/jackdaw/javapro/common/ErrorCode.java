@@ -21,6 +21,8 @@ public enum ErrorCode {
 
     NO_AUTH(40101,"无权限",""),
 
+    FRBIDDEWN(40301,"禁止访问",""),
+
     SYSTEM_ERROR(40500,"系统错误","");
     /**
      * 状态码

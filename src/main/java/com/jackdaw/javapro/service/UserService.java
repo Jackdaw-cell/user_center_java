@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 
 import javax.servlet.http.HttpServletRequest;
 import java.security.NoSuchAlgorithmException;
+import java.util.List;
 
 /**
 * @author Jackdaw
@@ -40,5 +41,39 @@ public interface UserService extends IService<User> {
 
     int userLogout(HttpServletRequest request);
 
+    public List<User> searchUserByTags(List<String> tagsList,User loginUser,long num);
 
+    /**
+     * 更新用户信息
+     * @param user
+     * @return
+     */
+    Integer updateUser(User user,User loginUser);
+
+    /**
+     * 获取当前已登录的用户信息
+     */
+    User getLoginUser(HttpServletRequest request);
+
+    /**
+     * 判断是否为管理员
+     * @param request
+     * @return
+     */
+    boolean isAdmin(HttpServletRequest request);
+
+    /**
+     * 判断是否为管理员
+     * @param user
+     * @return
+     */
+    boolean isAdmin(User user);
+
+    /**
+     * 匹配用户
+     * @param num
+     * @param loginUser
+     * @return
+     */
+    List<User> matchUsers(long num, User loginUser);
 }

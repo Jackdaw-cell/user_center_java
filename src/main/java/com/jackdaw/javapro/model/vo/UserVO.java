@@ -1,25 +1,27 @@
-package com.jackdaw.javapro.model.domain;
+package com.jackdaw.javapro.model.vo;
 
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
-import java.io.Serializable;
-import java.util.Date;
-
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.annotations.ApiModel;
 import lombok.Data;
 
+import java.io.Serializable;
+import java.util.Date;
+
 /**
  * 
+ * @author Jackdaw
  * @TableName user
  */
-@ApiModel(value = "用户模型")
-@TableName(value ="user")
 @Data
-public class User implements Serializable {
+public class UserVO implements Serializable {
+
+    private static final long serialVersionUID = 1L;
+
     /**
      * 主键ID
      */
@@ -41,11 +43,6 @@ public class User implements Serializable {
      * 账号
      */
     private String userAccount;
-
-    /**
-     * 密码
-     */
-    private String userPassword;
 
     /**
      * 头像
@@ -88,19 +85,9 @@ public class User implements Serializable {
     private Date updateTime;
 
     /**
-     * 
-     */
-    @TableLogic
-    private Integer isDelete;
-
-
-    /**
      * 星球编号
      */
     private String planetCode;
-
-    @TableField(exist = false)
-    private static final long serialVersionUID = 1L;
 
     /**
      * 标签(json类型)

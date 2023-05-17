@@ -1,15 +1,21 @@
 package com.jackdaw.javapro.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.jackdaw.javapro.common.BaseResponse;
 import com.jackdaw.javapro.common.ErrorCode;
 import com.jackdaw.javapro.common.ResultUtils;
 import com.jackdaw.javapro.exception.BusinessException;
 import com.jackdaw.javapro.model.domain.User;
-import com.jackdaw.javapro.model.domain.request.UserLoginRequest;
-import com.jackdaw.javapro.model.domain.request.UserRegisterRequest;
+import com.jackdaw.javapro.model.request.UserLoginRequest;
+import com.jackdaw.javapro.model.request.UserRegisterRequest;
 import com.jackdaw.javapro.service.UserService;
+import io.swagger.annotations.Api;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
@@ -17,23 +23,30 @@ import javax.servlet.http.HttpServletRequest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static com.jackdaw.javapro.constant.UserConstant.ADMIN_ROLE;
 import static com.jackdaw.javapro.constant.UserConstant.USER_LOGIN_STATE;
 
+@Api(value = "初始化首页")
 @RestController
+@CrossOrigin()  //允许任何访问
+//@CrossOrigin(origins = {"http://localhost:3000"})  //只允许3000访问
 @RequestMapping("/user")
+@Slf4j
 public class UserController {
 
     @Resource
     private UserService userService;
 
+    @Resource
+    private RedisTemplate<String,Object> redisTemplate;
+
     @PostMapping("/register")
     public BaseResponse<Long> userRegister(@RequestBody UserRegisterRequest userRegisterRequest) throws NoSuchAlgorithmException {
 
         if (userRegisterRequest == null) {
-//            return ResultUtils.error(ErrorCode.PARAMS_ERROR);
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         String userAccount = userRegisterRequest.getUserAccount();
@@ -62,7 +75,7 @@ public class UserController {
     }
 
     @PostMapping("/logout")
-    public BaseResponse<Integer> userLogin(HttpServletRequest httpServletRequest) throws NoSuchAlgorithmException {
+    public BaseResponse<Integer> userLogout(HttpServletRequest httpServletRequest) throws NoSuchAlgorithmException {
 
         if (httpServletRequest == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR,"请求错误");
@@ -85,7 +98,7 @@ public class UserController {
     }
 
     @GetMapping("/search")
-    public BaseResponse<List<User>> searchUser(String username, HttpServletRequest request){
+    public BaseResponse<List<User>> searchUsers(String username, HttpServletRequest request){
         Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
         User user=(User) userObj;
         if (user==null ||user.getUserRole()!=ADMIN_ROLE){
@@ -103,9 +116,52 @@ public class UserController {
         return ResultUtils.success(userCollection);
     }
 
+//    TODO：要分页，不然响应体要炸
+//    每次请求num加10，做到类似分页效果，坏处：越加载越卡（redis缓存）
+    @GetMapping("/search/tags")
+    public BaseResponse<List<User>> searchUsersByTags(@RequestParam(required = false) List<String> tagNameList,@RequestParam(required = false) long num,HttpServletRequest request){
+        if (CollectionUtils.isEmpty(tagNameList)){
+            return ResultUtils.error(ErrorCode.PARAMS_ERROR);
+        }
+        User loginUser = userService.getLoginUser(request);
+        List<User> userList = userService.searchUserByTags(tagNameList,loginUser,num);
+        return ResultUtils.success(userList);
+    }
+
+//    TODO：推荐多个用户
+    @GetMapping("/recommand")
+    public BaseResponse<Page<User>> recommand(long pageSize,long pageNum,HttpServletRequest request){
+        User loginUser = userService.getLoginUser(request);
+        String redisKey = String.format("javapro:user:recommend:%s:%s:%s", loginUser.getId(),pageSize,pageNum);
+        ValueOperations<String, Object> valueOperations = redisTemplate.opsForValue();
+        Page<User> userPage = (Page<User>) valueOperations.get(redisKey);
+        if (userPage!=null){
+            return ResultUtils.success(userPage);
+        }
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        userPage = userService.page(new Page<>(pageNum, pageSize), queryWrapper);
+//        先查缓存后查库
+        try{
+            valueOperations.set(redisKey,userPage,30000, TimeUnit.MILLISECONDS);
+        }catch (Exception e){
+            log.error("redis set key error",e);
+        }
+        return ResultUtils.success(userPage);
+    }
+
+    @PostMapping("/update")
+    public BaseResponse<Integer> updateUser(@RequestBody User user,HttpServletRequest request){
+        if (user == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+//        鉴定权限
+        User loginUser = userService.getLoginUser(request);
+        Integer result = userService.updateUser(user,loginUser);
+        return ResultUtils.success(result);
+    }
+
     @PostMapping("/delete")
     public BaseResponse<Boolean> deleteUser(@RequestBody long id, HttpServletRequest request){
-        System.out.println(request.getSession());
         Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
         User user=(User) userObj;
         if (user==null ||user.getUserRole()!=ADMIN_ROLE){
@@ -118,5 +174,19 @@ public class UserController {
         return ResultUtils.success(b);
     }
 
-
+    /**
+     * 获取最匹配的用户
+     *
+     * @param num
+     * @param request
+     * @return
+     */
+    @GetMapping("/match")
+    public BaseResponse<List<User>> matchUsers(long num, HttpServletRequest request) {
+        if (num <= 0 || num > 20) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        User user = userService.getLoginUser(request);
+        return ResultUtils.success(userService.matchUsers(num, user));
+    }
 }

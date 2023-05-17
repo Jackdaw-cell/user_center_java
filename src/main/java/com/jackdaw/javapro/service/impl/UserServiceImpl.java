@@ -1,15 +1,20 @@
 package com.jackdaw.javapro.service.impl;
-import java.util.Date;
+import java.util.*;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import com.jackdaw.javapro.common.ErrorCode;
 import com.jackdaw.javapro.exception.BusinessException;
 import com.jackdaw.javapro.model.domain.User;
 import com.jackdaw.javapro.service.UserService;
 import com.jackdaw.javapro.mapper.UserMapper;
+import com.jackdaw.javapro.utils.AlgorithmUtils;
+import javafx.util.Pair;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.DigestUtils;
 
 import javax.annotation.Resource;
@@ -17,7 +22,9 @@ import javax.servlet.http.HttpServletRequest;
 import java.security.NoSuchAlgorithmException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
+import static com.jackdaw.javapro.constant.UserConstant.ADMIN_ROLE;
 import static com.jackdaw.javapro.constant.UserConstant.USER_LOGIN_STATE;
 
 /**
@@ -138,6 +145,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         safeUser.setPhone(originUser.getPhone());
         safeUser.setUserStatus(originUser.getUserStatus());
         safeUser.setUserRole(originUser.getUserRole());
+        safeUser.setTags(originUser.getTags());
         return safeUser;
     }
 
@@ -150,6 +158,164 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 //        移除登录态
         request.getSession().removeAttribute(USER_LOGIN_STATE);
         return 1;
+
+    }
+
+    /**
+     * 根据标签查询用户,所有标签满足才返回
+     * @param tagsList
+     * @return
+     */
+    @Override
+    public List<User> searchUserByTags(List<String> tagsList, User loginUser, long num) {
+        if (CollectionUtils.isEmpty(tagsList)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        queryWrapper.select("id","tags");
+        queryWrapper.isNotNull("tags");
+        List<User> userList = this.list(queryWrapper);
+        return distinMatch(userList,loginUser,tagsList,num);
+    }
+
+
+    @Override
+    public Integer updateUser(User user, User loginUser) {
+//        TODO：如果user除了id其他属性都为null，则直接返回不需要任何操作（用户没改）
+        Long userId = user.getId();
+//      用户存在性
+        if (userId <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+//        如果是管理员-允许更新任何用户，用户-只允许更新自己
+        if (!isAdmin(loginUser) && !userId.equals(loginUser.getId())) {
+             throw new BusinessException(ErrorCode.NO_AUTH);
+        }
+        User oldUser = userMapper.selectById(userId);
+        if (oldUser == null) {
+            throw new BusinessException(ErrorCode.NULL_ERROR);
+        }
+        return userMapper.updateById(user);
+    }
+
+    /**
+     * 获取当前用户信息
+     * @param request
+     * @return
+     */
+    @Override
+    public User getLoginUser(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        Object user = request.getSession().getAttribute(USER_LOGIN_STATE);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.NO_AUTH);
+        }
+        return (User) user;
+    }
+
+    /**
+     * 判断当前登录的用户是否为管理员
+     */
+    @Override
+    public boolean isAdmin(HttpServletRequest request){
+        Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
+        User user = (User) userObj;
+        return user != null && user.getUserRole() == ADMIN_ROLE;
+    }
+
+    /**
+     * 判断当前登录的用户是否为管理员
+     */
+    @Override
+    public boolean isAdmin(User user) {
+        return user != null && user.getUserRole() == ADMIN_ROLE;
+    }
+
+    /**
+     * 找到标签相近的人
+     * @param num
+     * @param loginUser
+     * @return
+     */
+    @Override
+    public List<User> matchUsers(long num, User loginUser) {
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        queryWrapper.select("id", "tags");
+        queryWrapper.isNotNull("tags");
+        List<User> userList = this.list(queryWrapper);
+        String tags = loginUser.getTags();
+        Gson gson = new Gson();
+        List<String> tagList = gson.fromJson(tags, new TypeToken<List<String>>() {
+        }.getType());
+        return distinMatch(userList,loginUser,tagList,num);
+    }
+
+    /**
+     * 距离匹配算法
+     * @param userList
+     * @param loginUser
+     * @param tagList
+     * @param num
+     * @return
+     */
+    private List<User> distinMatch(List<User> userList,User loginUser,List<String> tagList,long num){
+        Gson gson = new Gson();
+        // 用户列表的下标 => 相似度
+        List<Pair<User, Long>> list = new ArrayList<>();
+        // 依次计算所有用户和当前用户的相似度
+        for (int i = 0; i < userList.size(); i++) {
+            User user = userList.get(i);
+            String userTags = user.getTags();
+            // 无标签或者为当前用户自己
+            if (StringUtils.isBlank(userTags) || user.getId() == loginUser.getId()) {
+                continue;
+            }
+            List<String> userTagList = gson.fromJson(userTags, new TypeToken<List<String>>() {
+            }.getType());
+            // 名字也加进标签集合，实现名字也能近似匹配
+            userTagList.add(user.getUsername());
+            // 计算分数
+            long distance = AlgorithmUtils.minDistance(tagList, userTagList);
+            list.add(new Pair<>(user, distance));
+        }
+        // 按编辑距离由小到大排序
+        List<Pair<User, Long>> topUserPairList = list.stream()
+                .sorted((a, b) -> (int) (a.getValue() - b.getValue()))
+                .limit(num)
+                .collect(Collectors.toList());
+        // 原本顺序的 userId 列表
+        List<Long> userIdList = topUserPairList.stream().map(pair -> pair.getKey().getId()).collect(Collectors.toList());
+        QueryWrapper<User> userQueryWrapper = new QueryWrapper<>();
+        userQueryWrapper.in("id", userIdList);
+        // 1, 3, 2
+        // User1、User2、User3
+        // 1 => User1, 2 => User2, 3 => User3
+        Map<Long, List<User>> userIdUserListMap = this.list(userQueryWrapper)
+                .stream()
+                .map(user -> getSafetyUser(user))
+                .collect(Collectors.groupingBy(User::getId));
+        List<User> finalUserList = new ArrayList<>();
+        for (Long userId : userIdList) {
+            finalUserList.add(userIdUserListMap.get(userId).get(0));
+        }
+        return finalUserList;
+    }
+
+    private  List<User> searchUsersByTagsBySQL(List<String> tagsList){
+        if (CollectionUtils.isEmpty(tagsList)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+       QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        for (String tagName:
+             tagsList) {
+            queryWrapper=queryWrapper.like("tags",tagName);
+        }
+        List<User> userList = userMapper.selectList(queryWrapper);
+//        函数式接口
+//        每个遍历的元素调用方法并覆写
+        return userList.stream().map(this::getSafetyUser).collect(Collectors.toList());
 
     }
 }

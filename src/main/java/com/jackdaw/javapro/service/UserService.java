@@ -41,7 +41,7 @@ public interface UserService extends IService<User> {
 
     int userLogout(HttpServletRequest request);
 
-    public List<User> searchUserByTags(List<String> tagsList,User loginUser,long num);
+    public List<User> searchUserByTags(List<String> tagsList,User loginUser,long pageNum, long num);
 
     /**
      * 更新用户信息
@@ -75,5 +75,5 @@ public interface UserService extends IService<User> {
      * @param loginUser
      * @return
      */
-    List<User> matchUsers(long num, User loginUser);
+    List<User> matchUsers(long pageNum, long num, User loginUser);
 }

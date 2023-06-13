@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
  */
 @Api(value = "组队接口")
 @RestController
-@CrossOrigin()  //允许任何访问
+//@CrossOrigin()  //允许任何访问
 @RequestMapping("/team")
 @Slf4j
 public class TeamController{

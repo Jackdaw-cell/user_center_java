@@ -59,3 +59,15 @@ create table user_team
         updateTime      datetime default CURRENT_TIMESTAMP null on update CURRENT_TIMESTAMP,
         isDelete        tinyint default 0 not null comment '是否删除'
 )   comment '用户队伍关系';
+
+create table chat_connect
+(
+    id         int auto_increment comment 'ID主键'
+        primary key,
+    fromName   varchar(255) null comment '连接发起者',
+    toName     varchar(255) null comment '连接接收者',
+    createTime datetime  default CURRENT_TIMESTAMP null comment '创建时间',
+    updateTime datetime  default CURRENT_TIMESTAMP null on update CURRENT_TIMESTAMP comment '创建时间',
+    del_flag   tinyint default 0 not null comment '是否删除'
+)
+    comment '会话连接记录';

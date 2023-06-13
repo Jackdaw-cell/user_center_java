@@ -4,10 +4,10 @@ spring:
   datasource:
     driver-class-name: com.mysql.jdbc.Driver
     #服务器上面写localhost是无效的，因为springboot容器里面没有MySQL，MySQL在容器外面，固无法访问
-#    url: jdbc:mysql://120.25.122.29:3306/user_center?useUnicode=true&characterEncoding=utf8&useSSL=false
-    url: jdbc:mysql://127.0.0.1:3306/jadw?useUnicode=true&characterEncoding=utf8&useSSL=false
+    url: jdbc:mysql://120.25.122.29:3306/user_center?useUnicode=true&characterEncoding=utf8&useSSL=false
+#    url: jdbc:mysql://127.0.0.1:3306/jadw?useUnicode=true&characterEncoding=utf8&useSSL=false
     username: root
-    password:
+    password: SBnightwatch777_
   session:
     store-type: redis
   mvc:
@@ -15,16 +15,22 @@ spring:
       matching-strategy: ANT_PATH_MATCHER
   redis:
     port: 6379
-    host: localhost
+    host: 120.25.122.29
+#    host: localhost
     database: 0
     timeout: 1000
+  http:
+    encoding:
+      charset: UTF-8
+      force: true
 server:
   port: 8080
   servlet:
     context-path: /api
     session:
       cookie:
-        domain: localhost
+        domain: linhaijian.top
+#        domain: localhost
       timeout: 86400
 mybatis-plus:
   configuration:
@@ -35,4 +41,8 @@ mybatis-plus:
       logic-delete-field: isDelete # 全局逻辑删除的实体字段名(since 3.3.0,配置后可以忽略不配置步骤2)
       logic-delete-value: 1 # 逻辑已删除值(默认为 1)
       logic-not-delete-value: 0 # 逻辑未删除值(默认为 0)
+yuapi:
+  client:
+    access-key: m3myozewahwadx4gvdjxnjrmm3c3k4f0
+    secret-key: 6xw04z98gjuq1gv5qhtnsr951pxmitou
 

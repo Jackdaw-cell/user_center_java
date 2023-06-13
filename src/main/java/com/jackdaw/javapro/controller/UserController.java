@@ -1,5 +1,8 @@
 package com.jackdaw.javapro.controller;
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.jackdaw.javapro.common.BaseResponse;
@@ -31,8 +34,8 @@ import static com.jackdaw.javapro.constant.UserConstant.USER_LOGIN_STATE;
 
 @Api(value = "初始化首页")
 @RestController
-@CrossOrigin()  //允许任何访问
-//@CrossOrigin(origins = {"http://localhost:3000"})  //只允许3000访问
+//@CrossOrigin()  //允许任何访问
+//@CrossOrigin(origins = {"http://localhost:3000"})
 @RequestMapping("/user")
 @Slf4j
 public class UserController {
@@ -119,33 +122,39 @@ public class UserController {
 //    TODO：要分页，不然响应体要炸
 //    每次请求num加10，做到类似分页效果，坏处：越加载越卡（redis缓存）
     @GetMapping("/search/tags")
-    public BaseResponse<List<User>> searchUsersByTags(@RequestParam(required = false) List<String> tagNameList,@RequestParam(required = false) long num,HttpServletRequest request){
+    public BaseResponse<List<User>> searchUsersByTags(@RequestParam(required = false) List<String> tagNameList ,@RequestParam(required = false) long pageNum,@RequestParam(required = false) long num,HttpServletRequest request){
         if (CollectionUtils.isEmpty(tagNameList)){
-            return ResultUtils.error(ErrorCode.PARAMS_ERROR);
+//            return ResultUtils.error(ErrorCode.PARAMS_ERROR);
         }
         User loginUser = userService.getLoginUser(request);
-        List<User> userList = userService.searchUserByTags(tagNameList,loginUser,num);
+        if (tagNameList.size()<=0){
+            tagNameList=new ArrayList<>();
+        }
+        List<User> userList = userService.searchUserByTags(tagNameList,loginUser,pageNum,num);
         return ResultUtils.success(userList);
     }
 
 //    TODO：推荐多个用户
     @GetMapping("/recommand")
-    public BaseResponse<Page<User>> recommand(long pageSize,long pageNum,HttpServletRequest request){
+    public BaseResponse<JSONObject> recommand(long pageSize,long pageNum,HttpServletRequest request){
         User loginUser = userService.getLoginUser(request);
         String redisKey = String.format("javapro:user:recommend:%s:%s:%s", loginUser.getId(),pageSize,pageNum);
         ValueOperations<String, Object> valueOperations = redisTemplate.opsForValue();
-        Page<User> userPage = (Page<User>) valueOperations.get(redisKey);
+//        转型问题
+        JSONObject userPage = (JSONObject) valueOperations.get(redisKey);
         if (userPage!=null){
             return ResultUtils.success(userPage);
         }
-        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        userPage = userService.page(new Page<>(pageNum, pageSize), queryWrapper);
 //        先查缓存后查库
         try{
-            valueOperations.set(redisKey,userPage,30000, TimeUnit.MILLISECONDS);
+            QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+            queryWrapper.ne("username",loginUser.getUsername());
+            Page<User> userPageToRedis = userService.page(new Page<>(pageNum, pageSize), queryWrapper);
+            valueOperations.set(redisKey,userPageToRedis,3000000, TimeUnit.MILLISECONDS);
         }catch (Exception e){
             log.error("redis set key error",e);
         }
+        userPage = (JSONObject) valueOperations.get(redisKey);
         return ResultUtils.success(userPage);
     }
 
@@ -182,11 +191,11 @@ public class UserController {
      * @return
      */
     @GetMapping("/match")
-    public BaseResponse<List<User>> matchUsers(long num, HttpServletRequest request) {
-        if (num <= 0 || num > 20) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR);
-        }
+    public BaseResponse<List<User>> matchUsers(long pageNum,long num, HttpServletRequest request) {
+//        if (num <= 0 || num > 20) {
+//            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+//        }
         User user = userService.getLoginUser(request);
-        return ResultUtils.success(userService.matchUsers(num, user));
+        return ResultUtils.success(userService.matchUsers(pageNum, num, user));
     }
 }

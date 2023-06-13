@@ -167,15 +167,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
      * @return
      */
     @Override
-    public List<User> searchUserByTags(List<String> tagsList, User loginUser, long num) {
-        if (CollectionUtils.isEmpty(tagsList)) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR);
-        }
+    public List<User> searchUserByTags(List<String> tagsList, User loginUser,long pageNum, long num) {
+//        if (CollectionUtils.isEmpty(tagsList)) {
+//            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+//        }
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        queryWrapper.select("id","tags");
+        queryWrapper.select("id","username","tags","avatarUrl");
         queryWrapper.isNotNull("tags");
         List<User> userList = this.list(queryWrapper);
-        return distinMatch(userList,loginUser,tagsList,num);
+        tagsList.removeIf(String::isEmpty);
+        return distinMatch(userList,loginUser,tagsList,pageNum,num);
     }
 
 
@@ -240,16 +241,20 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
      * @return
      */
     @Override
-    public List<User> matchUsers(long num, User loginUser) {
+    public List<User> matchUsers(long pageNum, long num, User loginUser) {
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        queryWrapper.select("id", "tags");
+        queryWrapper.select("id","username","tags","avatarUrl");
         queryWrapper.isNotNull("tags");
         List<User> userList = this.list(queryWrapper);
         String tags = loginUser.getTags();
         Gson gson = new Gson();
-        List<String> tagList = gson.fromJson(tags, new TypeToken<List<String>>() {
-        }.getType());
-        return distinMatch(userList,loginUser,tagList,num);
+        List<String> tagList = gson.fromJson(tags, new TypeToken<List<String>>() {}.getType());
+        if (tagList == null) {
+            tagList = new ArrayList<>();
+        }else{
+            tagList.removeIf(String::isEmpty);
+        }
+        return distinMatch(userList, loginUser, tagList, pageNum, num);
     }
 
     /**
@@ -260,7 +265,20 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
      * @param num
      * @return
      */
-    private List<User> distinMatch(List<User> userList,User loginUser,List<String> tagList,long num){
+    private List<User> distinMatch(List<User> userList,User loginUser,List<String> tagList,long pageNum,long num){
+        if (tagList.size()<=0) {
+            // 创建随机数生成器
+            Random random = new Random();
+            List<User> ramdaList = new ArrayList<>();
+            for (int i = 0; i < num; i++) {
+                // 生成一个随机索引
+                int randomIndex = random.nextInt(userList.size());
+                // 获取对应的元素并将其添加到抽取列表中
+                User selectedElement = userList.get(randomIndex);
+                ramdaList.add(selectedElement);
+            }
+            return ramdaList;
+        }
         Gson gson = new Gson();
         // 用户列表的下标 => 相似度
         List<Pair<User, Long>> list = new ArrayList<>();
@@ -269,13 +287,19 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             User user = userList.get(i);
             String userTags = user.getTags();
             // 无标签或者为当前用户自己
-            if (StringUtils.isBlank(userTags) || user.getId() == loginUser.getId()) {
+            if (StringUtils.isBlank(userTags) || user.getId().equals(loginUser.getId())) {
                 continue;
             }
             List<String> userTagList = gson.fromJson(userTags, new TypeToken<List<String>>() {
             }.getType());
-            // 名字也加进标签集合，实现名字也能近似匹配
-            userTagList.add(user.getUsername());
+            if (tagList.contains(user.getUsername())){
+                list.add(new Pair<>(user, -1L));
+                continue;
+            }
+            if (tagList.contains(Long.toString(user.getId()))){
+                list.add(new Pair<>(user, -1L));
+                continue;
+            }
             // 计算分数
             long distance = AlgorithmUtils.minDistance(tagList, userTagList);
             list.add(new Pair<>(user, distance));
@@ -283,12 +307,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         // 按编辑距离由小到大排序
         List<Pair<User, Long>> topUserPairList = list.stream()
                 .sorted((a, b) -> (int) (a.getValue() - b.getValue()))
-                .limit(num)
+//                .limit(num)
                 .collect(Collectors.toList());
         // 原本顺序的 userId 列表
         List<Long> userIdList = topUserPairList.stream().map(pair -> pair.getKey().getId()).collect(Collectors.toList());
         QueryWrapper<User> userQueryWrapper = new QueryWrapper<>();
         userQueryWrapper.in("id", userIdList);
+        userQueryWrapper.last("limit "+pageNum+","+num);
         // 1, 3, 2
         // User1、User2、User3
         // 1 => User1, 2 => User2, 3 => User3
@@ -298,6 +323,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
                 .collect(Collectors.groupingBy(User::getId));
         List<User> finalUserList = new ArrayList<>();
         for (Long userId : userIdList) {
+            if (userIdUserListMap.get(userId)==null){
+                continue;
+            }
             finalUserList.add(userIdUserListMap.get(userId).get(0));
         }
         return finalUserList;
